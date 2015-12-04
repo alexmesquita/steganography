@@ -1,14 +1,14 @@
 SRC_DIR = src
 
-CC = g++
+CC = gcc
 
-CFLAGS = -W -Wall -pedantic -ansi -std=c++11
+CFLAGS = -W -Wall -pedantic -ansi
 INCLUDES = -Iinclude
 
 .PHONY: clean depend
 
 all:
-	$(CC) -o bin/steg $(INCLUDES) $(SRC_DIR)/*.cpp $(CFLAGS) -lpthread
+	$(CC) -o bin/steg $(INCLUDES) $(SRC_DIR)/*.c $(CFLAGS)
 
 clean:
 	@echo Cleaning...
