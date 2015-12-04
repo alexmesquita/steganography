@@ -30,3 +30,9 @@
 
 # Debug files
 *.dSYM/
+
+# resources
+res/
+
+# binarys
+bin/
