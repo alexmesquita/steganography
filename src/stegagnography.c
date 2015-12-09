@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <openssl/md5.h>
 
 #define W 1280
-#define H 720
 #define STEG_BYTES 2073600 /*Quantos bytes modificados no arquivo*/
 #define STEG_BITS 4 /*Quantos bits modificados cada byte tem*/
 
@@ -46,7 +46,7 @@ char* get_steg_bytes(char* path, int* key, int key_size, int steg_bytes)
     char* bytes;
     FILE *steg_file;
 
-    steg_file = fopen(path, "r");
+    steg_file = fopen(path, "r+b");
 
     if (steg_file == NULL)
     {
@@ -70,6 +70,15 @@ char* get_steg_bytes(char* path, int* key, int key_size, int steg_bytes)
             fscanf(steg_file, "%c", &read);
 
             bytes[i] = read;
+
+            if (steg_bytes == (int)ceil(128.0 / STEG_BITS))
+            {
+                fseek(steg_file, file_position, SEEK_SET);
+                printf("%c -- ", read);
+                read &= 0xE0;
+                printf("%c\n", read);
+                fwrite(&read, 1, 1, steg_file);
+            }
         }
         else
         {
@@ -84,6 +93,7 @@ char* get_steg_bytes(char* path, int* key, int key_size, int steg_bytes)
             row += 3;
         }
     }
+    fclose(steg_file);
     return bytes;
 }
 
@@ -212,6 +222,35 @@ void save_steg(char* steg, char* file, int size)
     {
         errx(1, "It was not possible to open the result file");
     }
+    fclose(steg_file);
+}
+
+char* create_hash(char* path)
+{
+    int i;
+    unsigned char md5[MD5_DIGEST_LENGTH];
+    FILE *file = fopen (path, "rb");
+    MD5_CTX mdContext;
+    int bytes;
+    unsigned char data[1024];
+
+    if (file == NULL) {
+        errx(1, "The file can't be opened");
+    }
+
+    MD5_Init(&mdContext);
+    
+    while ((bytes = fread (data, 1, 1024, file)) != 0)
+    {
+        MD5_Update (&mdContext, data, bytes);
+    }
+    
+    MD5_Final (md5, &mdContext);
+    for(i = 0; i < MD5_DIGEST_LENGTH; i++) printf("%02x", md5[i]);
+    printf (" %s\n", path);
+    fclose (file);
+
+    return "md5";
 }
 
 
@@ -230,6 +269,7 @@ int main(int argc, char* argv[])
             hash_bytes = get_steg_bytes(argv[1], key, key_size, ceil(128.0 / STEG_BITS));
             hash_steg = generate_hash(hash_bytes, ceil(128.0 / STEG_BITS), STEG_BITS);
             save_steg(hash_steg, "res/hash", 16);
+            create_hash(argv[1]);
             break;
         default:
             errx(1, "invalid arguments");
