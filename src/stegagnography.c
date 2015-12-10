@@ -1,14 +1,12 @@
 #include <err.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #include <openssl/md5.h>
 
-#define W 1280
-#define STEG_BYTES 2073600 /*Quantos bytes modificados no arquivo*/
-#define STEG_BITS 4 /*Quantos bits modificados cada byte tem*/
-
-int k = 0, row = 0, col = 0, key_col = 0, key_row = 0;
+int k = 0, row = 0, col = 0, key_col = 0, key_row = 0, steg_bits = 0;
+int width_img = 0, width_steg = 0, height_steg = 0;
 
 int* get_key(char* path, int* key_size)
 {
@@ -64,19 +62,19 @@ char* get_steg_bytes(char* path, int* key, int key_size, int steg_bytes)
             key_col = (steg_position - 1) / 3;
 
             key_row = (steg_position - 1) % 3;
-            file_position = (row + key_row) * W + col + key_col;
+            file_position = (row + key_row) * width_img + col + key_col;
 
             fseek(steg_file, file_position, SEEK_SET);
             fscanf(steg_file, "%c", &read);
 
             bytes[i] = read;
 
-            if (steg_bytes == (int)ceil(128.0 / STEG_BITS))
+            if (steg_bytes == (int)ceil(128.0 / steg_bits))
             {
+                unsigned char cal_real_bit = 0xFF;
+                cal_real_bit <<= steg_bits;
                 fseek(steg_file, file_position, SEEK_SET);
-                printf("%c -- ", read);
-                read &= 0xE0;
-                printf("%c\n", read);
+                read &= cal_real_bit;
                 fwrite(&read, 1, 1, steg_file);
             }
         }
@@ -87,7 +85,7 @@ char* get_steg_bytes(char* path, int* key, int key_size, int steg_bytes)
         
         col += 3;
 
-        if(col + 3 > W)
+        if(col + 3 > width_img)
         {
             col = 0;
             row += 3;
@@ -97,7 +95,7 @@ char* get_steg_bytes(char* path, int* key, int key_size, int steg_bytes)
     return bytes;
 }
 
-char* generate_steg(char* steg_bytes, int bytes_size, int steg_bits)
+char* generate_steg(char* steg_bytes, int bytes_size)
 {
     int i, j, position, bit;
     char* result_steg;
@@ -147,7 +145,7 @@ char* generate_steg(char* steg_bytes, int bytes_size, int steg_bits)
 }
 
 
-char* generate_hash(char* hash_bytes, int bytes_size, int steg_bits)
+char* generate_hash(char* hash_bytes, int bytes_size)
 {
     int i, j, h = 0, position, bit;
     char* hash_steg;
@@ -210,12 +208,16 @@ char* generate_hash(char* hash_bytes, int bytes_size, int steg_bits)
 }
 
 
-void save_steg(char* steg, char* file, int size)
+void save_file(char* steg, char* file, int size)
 {
     FILE *steg_file;
     steg_file = fopen(file, "w");
     if (steg_file != NULL)
     {
+        if(strcmp(file, "res/result.y"))
+        {
+
+        }
         fwrite(steg , 1 , size, steg_file);
     }
     else
@@ -227,8 +229,8 @@ void save_steg(char* steg, char* file, int size)
 
 char* create_hash(char* path)
 {
-    int i;
-    unsigned char md5[MD5_DIGEST_LENGTH];
+    char *md5 = malloc(sizeof(char) * MD5_DIGEST_LENGTH);
+
     FILE *file = fopen (path, "rb");
     MD5_CTX mdContext;
     int bytes;
@@ -245,12 +247,11 @@ char* create_hash(char* path)
         MD5_Update (&mdContext, data, bytes);
     }
     
-    MD5_Final (md5, &mdContext);
-    for(i = 0; i < MD5_DIGEST_LENGTH; i++) printf("%02x", md5[i]);
-    printf (" %s\n", path);
+    MD5_Final ((unsigned char*)md5, &mdContext);
+    save_file(md5, "res/hash_orig", MD5_DIGEST_LENGTH);
     fclose (file);
 
-    return "md5";
+    return md5;
 }
 
 
@@ -258,18 +259,27 @@ int main(int argc, char* argv[])
 {
     int* key;
     int key_size = 0;
-    char *steg_bytes, *result_steg, *hash_bytes, *hash_steg;
+    char *steg_bytes, *result_steg, *hash_bytes, *hash_steg, *hash_img;
     switch (argc)
     {
-        case 3:
+        case 7:
             key = get_key(argv[2], &key_size);
-            steg_bytes = get_steg_bytes(argv[1], key, key_size, STEG_BYTES);
-            result_steg = generate_steg(steg_bytes, STEG_BYTES, STEG_BITS);
-            save_steg(result_steg, "res/result.y", STEG_BYTES);
-            hash_bytes = get_steg_bytes(argv[1], key, key_size, ceil(128.0 / STEG_BITS));
-            hash_steg = generate_hash(hash_bytes, ceil(128.0 / STEG_BITS), STEG_BITS);
-            save_steg(hash_steg, "res/hash", 16);
-            create_hash(argv[1]);
+            width_img = atoi(argv[3]);
+            width_steg = atoi(argv[4]);
+            height_steg = atoi(argv[5]);
+            steg_bits = atoi(argv[6]);
+            steg_bytes = get_steg_bytes(argv[1], key, key_size, width_steg * height_steg);
+            result_steg = generate_steg(steg_bytes, width_steg * height_steg);
+            save_file(result_steg, "res/result.y", width_steg * height_steg);
+            hash_bytes = get_steg_bytes(argv[1], key, key_size, ceil(128.0 / steg_bits));
+            hash_steg = generate_hash(hash_bytes, ceil(128.0 / steg_bits));
+            save_file(hash_steg, "res/hash", 16);
+            hash_img = create_hash(argv[1]);
+
+            if(strcmp(hash_steg, hash_img) == 0)
+            {
+                printf("Bateu\n");
+            }
             break;
         default:
             errx(1, "invalid arguments");
@@ -278,5 +288,7 @@ int main(int argc, char* argv[])
     free(key);
     free(steg_bytes);
     free(result_steg);
+    free(hash_steg);
+    free(hash_img);
     return 0;
 }
