@@ -2,7 +2,7 @@ SRC_DIR = src
 
 CC = gcc
 
-CFLAGS = -W -Wall -pedantic -ansi -lssl -lcrypto -lm
+CFLAGS = -W -Wall -pedantic -ansi -lssl -lcrypto -lm -std=c99
 INCLUDES = -Iinclude
 
 .PHONY: clean depend

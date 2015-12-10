@@ -1,12 +1,27 @@
+#include <arpa/inet.h>
 #include <err.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#include <fcntl.h>
 #include <math.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <openssl/md5.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <termios.h>
+#include <unistd.h>
+
+#define IP "192.168.1.5"
+#define PORT 3000
 
 int k = 0, row = 0, col = 0, key_col = 0, key_row = 0, steg_bits = 0;
 int width_img = 0, width_steg = 0, height_steg = 0;
+int socket_desc = 0;
 
 int* get_key(char* path, int* key_size)
 {
@@ -254,6 +269,67 @@ char* create_hash(char* path)
     return md5;
 }
 
+/*
+*   Habilida o socket a aceitar uma nova comunicacao
+*   Return: Descritor do socket
+*/
+int do_connect()
+{
+    struct sockaddr_in addr_struct;
+    int socket_descriptor;
+
+    /*Cria um novo socket*/
+    socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_descriptor == -1)
+    {
+        errx(1, "Erro ao criar o socket");
+    }
+
+    /*Define as propriedades da conexao*/
+    addr_struct.sin_family = AF_INET;
+    addr_struct.sin_port = htons(PORT);
+    addr_struct.sin_addr.s_addr = inet_addr(IP);
+    bzero(&(addr_struct.sin_zero), 8);
+
+    /*Cria uma conexao com as propriedades passadas*/
+    if (connect(socket_descriptor,(struct sockaddr *) &addr_struct, sizeof(struct sockaddr)) == -1) 
+    {
+        close(socket_descriptor);
+        errx(1, "Erro ao conectar com o servidor");
+    }
+
+    return socket_descriptor;
+}
+
+void send_img(char* img, int size)
+{
+    socket_desc = do_connect(PORT, IP);
+
+    if (send(socket_desc, &size, size, 0) == -1)
+    {
+        close(socket_desc);
+        errx(1, "Erro ao enviar mensagem ao servidor");
+    }
+
+    int i;
+    for (i = 0; i < size / 1024; i++)
+    {
+        if (send(socket_desc, &img + i * 1024, 1024, 0) == -1)
+        {
+            close(socket_desc);
+            errx(1, "Erro ao enviar mensagem ao servidor");
+        }
+    }
+
+    if (i % 1024)
+    {
+        if (send(socket_desc, &img, i % 1024, 0) == -1)
+        {
+            close(socket_desc);
+            errx(1, "Erro ao enviar mensagem ao servidor");
+        }
+    }
+}
 
 int main(int argc, char* argv[])
 {
@@ -279,6 +355,7 @@ int main(int argc, char* argv[])
             if(strcmp(hash_steg, hash_img) == 0)
             {
                 printf("Bateu\n");
+                send_img(result_steg, width_steg * height_steg);
             }
             break;
         default:
