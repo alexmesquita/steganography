@@ -7,8 +7,11 @@ INCLUDES = -Iinclude
 
 .PHONY: clean depend
 
-all:
-	$(CC) -o bin/steg $(INCLUDES) $(SRC_DIR)/*.c $(CFLAGS)
+server:
+	$(CC) -o bin/server $(SRC_DIR)/server.c
+
+steg:
+	$(CC) -o bin/steg $(INCLUDES) $(SRC_DIR)/steganography.c $(CFLAGS)
 
 clean:
 	@echo Cleaning...
